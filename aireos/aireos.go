@@ -83,7 +83,13 @@ func (w *Wlc) GetApDb() []CiscoAP {
 		wg.Add(1)
 		sem <- struct{}{}
 		go func(apName string) {
-			w.dbWorker(conns, apName, sem, ap)
+			dworker := dbWorkerArgs{
+				ConnPool: conns,
+				ApName:   apName,
+				Sem:      sem,
+				ApCh:     ap,
+			}
+			go w.dbWorker(&dworker)
 			cAp := <-ap
 			aps = append(aps, cAp)
 			wg.Done()
@@ -98,11 +104,18 @@ func (w *Wlc) GetApDb() []CiscoAP {
 	return aps
 }
 
-func (w *Wlc) dbWorker(conns [3]*connPool, apName string, sem chan struct{}, ap chan CiscoAP) {
-	cmd := fmt.Sprintf("show ap config general %s", apName)
-	for i, conn := range conns {
+type dbWorkerArgs struct {
+	ConnPool [3]*connPool
+	ApName   string
+	Sem      chan struct{}
+	ApCh     chan CiscoAP
+}
+
+func (w *Wlc) dbWorker(worker *dbWorkerArgs) {
+	cmd := fmt.Sprintf("show ap config general %s", worker.ApName)
+	for i, conn := range worker.ConnPool {
 		if !conn.InUse {
-			conns[i].InUse = true
+			worker.ConnPool[i].InUse = true
 			out, _ := conn.SSH.SendCmd(cmd)
 			macRe := regexp.MustCompile(`MAC\sAddress[\\.]+\s(\S+)`)
 			apGrpRe := regexp.MustCompile(`AP\sGroup\sName[\\.]+\s(\S+)`)
@@ -125,15 +138,15 @@ func (w *Wlc) dbWorker(conns [3]*connPool, apName string, sem chan struct{}, ap 
 				m := apModelRe.FindStringSubmatch(out)
 				apModel = m[1]
 			}
-			ap <- CiscoAP{
-				Name:    apName,
+			worker.ApCh <- CiscoAP{
+				Name:    worker.ApName,
 				MacAddr: macAddr,
 				Serial:  sn,
 				Group:   apGrp,
 				Model:   apModel,
 			}
-			conns[i].InUse = false
-			<-sem
+			worker.ConnPool[i].InUse = false
+			<-worker.Sem
 			break
 		}
 	}
