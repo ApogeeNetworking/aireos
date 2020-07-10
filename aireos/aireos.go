@@ -284,3 +284,10 @@ func (w *Wlc) SetApGroup(groupName, apName string) {
 	w.Client.SendConfig("y")
 	time.Sleep(250 * time.Millisecond)
 }
+
+// SaveConfg ...
+func (w *Wlc) SaveConfig() {
+	w.Client.SendConfig("save config")
+	w.Client.SendConfig("y")
+	time.Sleep(250 * time.Millisecond)
+}
