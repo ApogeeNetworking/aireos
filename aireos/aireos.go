@@ -54,6 +54,12 @@ type ApIntf struct {
 	Drops  string
 }
 
+// Logout ...
+func (w *Wlc) Logout() {
+	w.Client.SendConfig("logout")
+	w.Client.Close()
+}
+
 // GetApDb ...
 func (w *Wlc) GetApDb() []CiscoAP {
 	// First Retreive Inventory for All AP's
@@ -72,10 +78,11 @@ func (w *Wlc) GetApDb() []CiscoAP {
 	var aps []CiscoAP
 	// Close the Current Client's SSH Connect
 	// So we can Spawn Multiple Concurrent Connections
-	w.Client.Close()
+	fmt.Println("Logout Session to collect AP DB")
+	w.Logout()
 	conns := w.spawnConnPool()
 	// Make a Semaphore
-	sem := make(chan struct{}, 3)
+	sem := make(chan struct{}, 2)
 	// CiscoAP Channel to Receive AP Config Data
 	ap := make(chan CiscoAP, len(apNames))
 	var wg sync.WaitGroup
@@ -96,7 +103,7 @@ func (w *Wlc) GetApDb() []CiscoAP {
 		}(apName)
 	}
 	wg.Wait()
-	w.closeConnPool(conns)
+	defer w.closeConnPool(conns)
 	err := w.Client.Connect(3)
 	if err != nil {
 		fmt.Println(err)
@@ -105,7 +112,7 @@ func (w *Wlc) GetApDb() []CiscoAP {
 }
 
 type dbWorkerArgs struct {
-	ConnPool [3]*connPool
+	ConnPool [2]*connPool
 	ApName   string
 	Sem      chan struct{}
 	ApCh     chan CiscoAP
@@ -113,41 +120,45 @@ type dbWorkerArgs struct {
 
 func (w *Wlc) dbWorker(worker *dbWorkerArgs) {
 	cmd := fmt.Sprintf("show ap config general %s", worker.ApName)
-	for i, conn := range worker.ConnPool {
-		if !conn.InUse {
-			worker.ConnPool[i].InUse = true
-			out, _ := conn.SSH.SendCmd(cmd)
-			macRe := regexp.MustCompile(`MAC\sAddress[\\.]+\s(\S+)`)
-			apGrpRe := regexp.MustCompile(`AP\sGroup\sName[\\.]+\s(\S+)`)
-			apSnRe := regexp.MustCompile(`Serial\sNumber[\\.]+\s(\S+)`)
-			apModelRe := regexp.MustCompile(`AP\sModel[\\.]+\s(\S+)`)
-			var macAddr, sn, apGrp, apModel string
-			if macRe.MatchString(out) {
-				m := macRe.FindStringSubmatch(out)
-				macAddr = m[1]
+	for {
+		for i, conn := range worker.ConnPool {
+			if !conn.InUse {
+				worker.ConnPool[i].InUse = true
+				out, _ := conn.SSH.SendCmd(cmd)
+				macRe := regexp.MustCompile(`MAC\sAddress[\\.]+\s(\S+)`)
+				apGrpRe := regexp.MustCompile(`AP\sGroup\sName[\\.]+\s(\S+)`)
+				apSnRe := regexp.MustCompile(`Serial\sNumber[\\.]+\s(\S+)`)
+				apModelRe := regexp.MustCompile(`AP\sModel[\\.]+\s(\S+)`)
+				var macAddr, sn, apGrp, apModel string
+				if macRe.MatchString(out) {
+					m := macRe.FindStringSubmatch(out)
+					macAddr = m[1]
+				}
+				if apGrpRe.MatchString(out) {
+					m := apGrpRe.FindStringSubmatch(out)
+					apGrp = m[1]
+				}
+				if apSnRe.MatchString(out) {
+					m := apSnRe.FindStringSubmatch(out)
+					sn = m[1]
+				}
+				if apModelRe.MatchString(out) {
+					m := apModelRe.FindStringSubmatch(out)
+					apModel = m[1]
+				}
+				ap := CiscoAP{
+					Name:    worker.ApName,
+					MacAddr: macAddr,
+					Serial:  sn,
+					Group:   apGrp,
+					Model:   apModel,
+				}
+				fmt.Println(ap)
+				worker.ApCh <- ap
+				worker.ConnPool[i].InUse = false
+				<-worker.Sem
+				return
 			}
-			if apGrpRe.MatchString(out) {
-				m := apGrpRe.FindStringSubmatch(out)
-				apGrp = m[1]
-			}
-			if apSnRe.MatchString(out) {
-				m := apSnRe.FindStringSubmatch(out)
-				sn = m[1]
-			}
-			if apModelRe.MatchString(out) {
-				m := apModelRe.FindStringSubmatch(out)
-				apModel = m[1]
-			}
-			worker.ApCh <- CiscoAP{
-				Name:    worker.ApName,
-				MacAddr: macAddr,
-				Serial:  sn,
-				Group:   apGrp,
-				Model:   apModel,
-			}
-			worker.ConnPool[i].InUse = false
-			<-worker.Sem
-			break
 		}
 	}
 }
@@ -157,9 +168,9 @@ type connPool struct {
 	SSH   *gonet.Gonet
 }
 
-func (w *Wlc) spawnConnPool() [3]*connPool {
-	var conns [3]*connPool
-	for i := 0; i < 3; i++ {
+func (w *Wlc) spawnConnPool() [2]*connPool {
+	var conns [2]*connPool
+	for i := 0; i < 2; i++ {
 		client := &gonet.Gonet{
 			IP:       w.Client.IP,
 			Username: w.Client.Username,
@@ -176,8 +187,9 @@ func (w *Wlc) spawnConnPool() [3]*connPool {
 	return conns
 }
 
-func (w *Wlc) closeConnPool(conns [3]*connPool) {
+func (w *Wlc) closeConnPool(conns [2]*connPool) {
 	for _, conn := range conns {
+		conn.SSH.SendConfig("logout")
 		conn.SSH.Close()
 	}
 }

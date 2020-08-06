@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -28,22 +27,11 @@ func main() {
 	defer wlc.Client.Close()
 
 	aps := wlc.GetApDb()
-	fmt.Println(len(aps))
-	j, _ := json.Marshal(aps)
-	fmt.Println(string(j))
-	// oldApName := "AP00BE.759E.3C24"
-	// config ap name <new-name> <old-name>
-	// apName := "ap01.core-dev.test.tx"
-	// wlc.SetApName(oldApName, apName)
-	// wlc.SetApName(apName, oldApName)
-	// time.Sleep(500 * time.Millisecond)
-	// apGroup := "Austin-Corp-Default"
-	// apGroup := "default-group"
-	// wlc.SetApGroup(apGroup, oldApName)
-	// config ap group-name <group-name> <ap-name>
-	// fmt.Println(len(aps))
+	fmt.Println(aps)
+
 	// apCdp := wlc.GetApCdp("APB026.80DF.45E8")
-	// apIntf := wlc.GetApEthStat("APB026.80DF.45E8")
 	// fmt.Println(apCdp)
-	// fmt.Println(apIntf)
+	// apIntf := wlc.GetApEthStat("ap01.mnsu.craw.dining.mn")
+	// 	apIntf := wlc.GetApEthStat("302686-CrawA-403")
+	// 	fmt.Println(apIntf)
 }
