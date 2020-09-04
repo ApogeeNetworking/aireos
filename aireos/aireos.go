@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/drkchiloll/gonet"
+	"github.com/ApogeeNetworking/gonet"
 )
 
 // Wlc ...
