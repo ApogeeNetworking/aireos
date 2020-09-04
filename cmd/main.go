@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/drkchiloll/ciscowlc-aireos/aireos"
+	"github.com/ApogeeNetworking/ciscowlc-aireos/aireos"
 	"github.com/subosito/gotenv"
 )
 
