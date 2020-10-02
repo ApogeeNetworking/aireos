@@ -3,6 +3,8 @@ package aireos
 import (
 	"fmt"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,8 +60,12 @@ type ApIntf struct {
 
 // Logout ...
 func (w *Service) Logout() {
-	// w.Client.SendConfig("logout")
 	w.Client.Disconnect()
+}
+
+//GetApDetail ...
+func (w *Service) GetApDetail(macAddr string) (aireoshttp.ApDetail, error) {
+	return w.HTTPClient.GetApDetails(macAddr)
 }
 
 // GetAp ...
@@ -203,7 +209,7 @@ func (w *Service) parseApIntfStat(out string) ApIntf {
 func (w *Service) SetApName(newApName, arg string) {
 	// arg can either be Old AP Name, MacAddr, OR Serial Number
 	cmd := fmt.Sprintf("config ap name %s %s", newApName, arg)
-	w.Client.SendConfig([]string{cmd})
+	w.Client.SendCmd(cmd)
 	time.Sleep(250 * time.Millisecond)
 }
 
@@ -211,9 +217,103 @@ func (w *Service) SetApName(newApName, arg string) {
 func (w *Service) SetApGroup(groupName, apName string) {
 	cmd := fmt.Sprintf("config ap group-name %s %s", groupName, apName)
 	w.Client.SendConfig([]string{cmd})
+	time.Sleep(250 * time.Millisecond)
+}
+
+// FactoryResetAp ...
+func (w *Service) FactoryResetAp(apName string) (string, error) {
+	cmd := fmt.Sprintf("clear ap config %s", apName)
+	out, err := w.Client.SendConfig([]string{cmd})
+	if err != nil {
+		return "", fmt.Errorf("%v", err)
+	}
+	var result string
+	lines := strings.Split(out, "\n")
+	for _, line := range lines {
+		re := regexp.MustCompile(`All\sAP\sconfiguration(.*)`)
+		if re.MatchString(line) {
+			result = re.FindString(line)
+			break
+		}
+	}
+	return result, nil
 }
 
 // SaveConfig ...
 func (w *Service) SaveConfig() {
 	w.Client.SendConfig([]string{"save config"})
+	time.Sleep(250 * time.Millisecond)
+}
+
+// LanPortState string enable|disable
+type LanPortState string
+
+// LPState {Enable: LanSportState, Disable...}
+type LPState struct {
+	Enable  LanPortState
+	Disable LanPortState
+}
+
+// ApLanPortState enum ...
+var ApLanPortState = LPState{
+	Enable:  "enable",
+	Disable: "disable",
+}
+
+// ApLanPort ...
+type ApLanPort struct {
+	// LAN Port-Id
+	ID int
+	// Enable|Disable
+	State LanPortState
+	// Operational VLAN
+	VlanID int
+}
+
+// GetApLanPorts ...
+func (w *Service) GetApLanPorts(apName string) ([]ApLanPort, error) {
+	cmd := fmt.Sprintf("show ap lan port-summary %s", apName)
+	out, _ := w.Client.SendCmd(cmd)
+	lines := strings.Split(out, "\n")
+	lanRe := regexp.MustCompile(`lan(\d)`)
+	statRe := regexp.MustCompile(`enabled|disabled`)
+	vlRe := regexp.MustCompile(`\d+`)
+	var apLanPorts []ApLanPort
+	for _, line := range lines {
+		line = strings.ToLower(trimWS(line))
+		if lanRe.MatchString(line) {
+			// Parse out the Port-Id
+			pidMatch := lanRe.FindStringSubmatch(line)
+			id, _ := strconv.Atoi(pidMatch[1])
+			// Parse out the LanPortState
+			status := statRe.FindString(line)
+			var state LanPortState
+			switch status {
+			case "enabled":
+				state = LanPortState("enable")
+			case "disabled":
+				state = LanPortState("disable")
+			}
+			// Parse out the VlanID
+			vlanID, _ := strconv.Atoi(vlRe.FindString(line[10:]))
+			apLanPorts = append(apLanPorts, ApLanPort{
+				ID:     id,
+				State:  state,
+				VlanID: vlanID,
+			})
+		}
+	}
+	return apLanPorts, nil
+}
+
+// SetApLanPortState ...
+func (w *Service) SetApLanPortState(apName string, portID int, state LanPortState) {
+	cmd := fmt.Sprintf("config ap lan port-id %d %s %s", portID, string(state), apName)
+	w.Client.SendCmd(cmd)
+}
+
+// SetApLanPortVlanID ...
+func (w *Service) SetApLanPortVlanID(apName string, portID, vlanID int) {
+	cmd := fmt.Sprintf("config ap lan enable access vlan %d %d %s", vlanID, portID, apName)
+	w.Client.SendCmd(cmd)
 }
