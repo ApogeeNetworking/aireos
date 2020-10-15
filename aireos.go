@@ -220,6 +220,14 @@ func (w *Service) SetApGroup(groupName, apName string) {
 	time.Sleep(250 * time.Millisecond)
 }
 
+// RebootAp ...
+func (w *Service) RebootAp(apName string) string {
+	cmd := fmt.Sprintf("config ap reset %s", apName)
+	output, _ := w.Client.SendConfig([]string{cmd})
+	time.Sleep(250 * time.Millisecond)
+	return output
+}
+
 // FactoryResetAp ...
 func (w *Service) FactoryResetAp(apName string) (string, error) {
 	cmd := fmt.Sprintf("clear ap config %s", apName)
