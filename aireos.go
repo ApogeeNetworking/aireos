@@ -91,7 +91,7 @@ func (w *Service) GetApDb() ([]CiscoAP, error) {
 	httpAps, _ := w.HTTPClient.GetAps()
 	var wg sync.WaitGroup
 	var mut sync.Mutex
-	sem := make(chan struct{}, 4)
+	sem := make(chan struct{}, 3)
 	for _, httpAp := range httpAps {
 		wg.Add(1)
 		sem <- struct{}{}
