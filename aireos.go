@@ -235,6 +235,31 @@ func (w *Service) SetApGroup(groupName, apName string) {
 	time.Sleep(250 * time.Millisecond)
 }
 
+// ApHaCfg used to setup HA for an AccessPoint
+type ApHaCfg struct {
+	ApName string
+	// System Name (eg. Hostname)
+	PrimaryName string
+	PrimaryIP   string
+	// System Name (eg. Hostname)
+	SecondaryName string
+	SecondaryIP   string
+}
+
+// SetApHa ...
+func (w *Service) SetApHa(haCfg ApHaCfg) {
+	cmd := fmt.Sprintf(
+		"config ap primary-base %s %s %s",
+		haCfg.PrimaryName, haCfg.ApName, haCfg.PrimaryIP,
+	)
+	w.Client.SendConfig([]string{cmd})
+	cmd = fmt.Sprintf(
+		"config ap secondary-base %s %s %s",
+		haCfg.SecondaryName, haCfg.ApName, haCfg.SecondaryIP,
+	)
+	w.Client.SendConfig([]string{cmd})
+}
+
 // RebootAp ...
 func (w *Service) RebootAp(apName string) string {
 	cmd := fmt.Sprintf("config ap reset %s", apName)
