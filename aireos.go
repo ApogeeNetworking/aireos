@@ -2,6 +2,7 @@ package aireos
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
@@ -20,12 +21,26 @@ type Service struct {
 }
 
 // New ...
-func New(host, user, pass string) *Service {
+func New(host, user, pass, version string) *Service {
+	var dtype gonetssh.DeviceType
+	switch version {
+	case "old":
+		dtype = gonetssh.DType.CiscoAireosOld
+	case "new":
+		dtype = gonetssh.DType.CiscoAireos
+	}
 	c, _ := gonetssh.NewDevice(
-		host, user, pass, "", gonetssh.DType.CiscoAireos,
+		host, user, pass, "", dtype,
 	)
 	httpClient := aireoshttp.New(host, user, pass, true)
-	httpClient.Login()
+	err := httpClient.Login()
+	if err != nil {
+		httpClient.BaseURL = fmt.Sprintf("https://%s", host)
+		err := httpClient.Login()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 	return &Service{
 		Client:     c,
 		HTTPClient: httpClient,
