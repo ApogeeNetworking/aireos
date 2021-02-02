@@ -260,6 +260,50 @@ func (w *Service) SetApHa(haCfg ApHaCfg) {
 	w.Client.SendConfig([]string{cmd})
 }
 
+// SetApPriority ...
+func (w *Service) SetApPriority(apName string) {
+	cmd := fmt.Sprintf("config ap priority 4 %s", apName)
+	w.Client.SendConfig([]string{cmd})
+}
+
+// GetApHaCfg ...
+func (w *Service) GetApHaCfg(apName string) ApHaCfg {
+	var haCfg ApHaCfg = ApHaCfg{
+		ApName: apName,
+	}
+	cmd := fmt.Sprintf("show ap config general %s", apName)
+	out, _ := w.Client.SendCmd(cmd)
+	priNameRe := regexp.MustCompile(`Primary\sCisco\sSwitch\sName\.+\s(\S+)`)
+	priIPRe := regexp.MustCompile(`Primary\sCisco\sSwitch\sIP\sAddress\.+\s(\S+)`)
+	secNameRe := regexp.MustCompile(`Secondary\sCisco\sSwitch\sName\.+\s(\S+)`)
+	secIPRe := regexp.MustCompile(`Secondary\sCisco\sSwitch\sIP\sAddress\.+\s(\S+)`)
+	if priNameRe.MatchString(out) {
+		matches := priNameRe.FindStringSubmatch(out)
+		if len(matches) == 2 {
+			haCfg.PrimaryName = matches[1]
+		}
+	}
+	if priIPRe.MatchString(out) {
+		matches := priIPRe.FindStringSubmatch(out)
+		if len(matches) == 2 {
+			haCfg.PrimaryIP = matches[1]
+		}
+	}
+	if secNameRe.MatchString(out) {
+		matches := secNameRe.FindStringSubmatch(out)
+		if len(matches) == 2 {
+			haCfg.SecondaryName = matches[1]
+		}
+	}
+	if secIPRe.MatchString(out) {
+		matches := secIPRe.FindStringSubmatch(out)
+		if len(matches) == 2 {
+			haCfg.SecondaryIP = matches[1]
+		}
+	}
+	return haCfg
+}
+
 // RebootAp ...
 func (w *Service) RebootAp(apName string) string {
 	cmd := fmt.Sprintf("config ap reset %s", apName)
